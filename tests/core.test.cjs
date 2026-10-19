@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const C = require('../dist/core.js');
+const C = require('../core.js');
 const d = '2026-10-18', base = C.dayStart(d), now = base + C.DAY - 1;
 const record = (start, end, title = '工作', id = C.id()) => ({ id, start: base + start * 3600000, end: base + end * 3600000, title, category: 'work' });
 

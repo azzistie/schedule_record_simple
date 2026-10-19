@@ -19,7 +19,8 @@ import webbrowser
 from contextlib import contextmanager, closing
 
 ROOT = Path(__file__).resolve().parent
-WEB = ROOT / "dist"
+WEB = ROOT
+PUBLIC_FILES = {"index.html", "styles.css", "app.js", "core.js", "sw.js", "icon.svg", "manifest.webmanifest"}
 CATEGORIES = {"work", "study", "life", "health", "rest", "other"}
 CHINA = timezone(timedelta(hours=8))
 MAX_BODY = 20 * 1024 * 1024
@@ -189,6 +190,8 @@ def make_handler(store: Store, token: str, port: int, lan: bool):
                 return self.respond(404, {"error": "接口不存在。"}, head=head)
             try:
                 relative = unquote(path).lstrip("/") or "index.html"
+                if relative not in PUBLIC_FILES:
+                    return self.respond(404, "Not found", "text/plain; charset=utf-8", head=head)
                 file = (WEB / relative).resolve()
                 if not file.is_relative_to(WEB.resolve()) or not file.is_file():
                     return self.respond(404, "Not found", "text/plain; charset=utf-8", head=head)

@@ -1,4 +1,4 @@
-const CACHE = 'shiguang-shell-v1';
+const CACHE = 'shiguang-shell-v2-monochrome';
 const FILES = ['./', './index.html', './styles.css', './core.js', './app.js', './icon.svg', './manifest.webmanifest'];
 self.addEventListener('install', event => event.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('shiguang-shell-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())));

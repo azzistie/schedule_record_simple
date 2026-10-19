@@ -8,7 +8,7 @@ $pythonCmd = Get-Command python -ErrorAction SilentlyContinue
 if ($pythonCmd) { $pythonCandidates += $pythonCmd.Source }
 $pythonExe = $pythonCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $pythonExe) {
-  Write-Host 'Python 3.10+ is required. You can also open dist/index.html for browser-only use.'
+  Write-Host 'Python 3.10+ is required. You can also open index.html for browser-only use.'
   exit 1
 }
 $serverArgs = @((Join-Path $taskRoot 'server.py'), '--port', "$Port")

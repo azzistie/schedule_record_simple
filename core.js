@@ -6,9 +6,9 @@
   'use strict';
   const DAY = 86400000;
   const CATEGORIES = {
-    work: { name: '工作', color: '#4b7c67' }, study: { name: '学习', color: '#8b79b5' },
-    life: { name: '生活', color: '#d6a267' }, health: { name: '运动', color: '#76a3ba' },
-    rest: { name: '休息', color: '#b4869c' }, other: { name: '其他', color: '#96a09b' }
+    work: { name: '工作', color: '#252525' }, study: { name: '学习', color: '#505050' },
+    life: { name: '生活', color: '#747474' }, health: { name: '运动', color: '#929292' },
+    rest: { name: '休息', color: '#b0b0b0' }, other: { name: '其他', color: '#cdcdcd' }
   };
   const id = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
   const dateKey = ms => new Date(ms + 8 * 3600000).toISOString().slice(0, 10);
@@ -16,6 +16,10 @@
   const addDays = (date, n) => dateKey(dayStart(date) + n * DAY);
   const time = ms => new Date(ms + 8 * 3600000).toISOString().slice(11, 16);
   const localInput = ms => new Date(ms + 8 * 3600000).toISOString().slice(0, 16);
+  const exportFilename = (extension, now = Date.now()) => {
+    const stamp = new Date(now + 8 * 3600000).toISOString().slice(0, 19).replace('T', '_').replaceAll(':', '-');
+    return `schedule_record_${stamp}.${extension}`;
+  };
   const parseLocal = text => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(text) ? Date.parse(text + ':00+08:00') : NaN;
   function duration(ms, precise = false) {
     const mins = Math.floor(Math.max(0, ms) / 60000);
@@ -125,5 +129,5 @@
     };
     return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Shiguang//Time Journal//ZH', 'CALSCALE:GREGORIAN', ...todos.flatMap(t => ['BEGIN:VEVENT', 'UID:' + t.id + '@shiguang', 'DTSTAMP:' + utc(Date.now()), 'DTSTART:' + utc(t.start), 'DTEND:' + utc(t.end), 'SUMMARY:' + escape(t.title), 'DESCRIPTION:' + escape((t.done ? '已完成\n' : '') + (t.notes || '')), 'END:VEVENT']), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
   }
-  return { DAY, CATEGORIES, id, dateKey, dayStart, addDays, time, localInput, parseLocal, duration, emptyState, overlap, inferCategory, validateRecord, insertRecord, anchor, timeline, matches, statistics, validateState, csv, calendarFile };
+  return { DAY, CATEGORIES, id, dateKey, dayStart, addDays, time, localInput, exportFilename, parseLocal, duration, emptyState, overlap, inferCategory, validateRecord, insertRecord, anchor, timeline, matches, statistics, validateState, csv, calendarFile };
 });
