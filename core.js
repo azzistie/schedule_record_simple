@@ -77,6 +77,31 @@
     if (cursor < end) rows.push({ id: 'gap-' + cursor, gap: true, start: cursor, end });
     return rows;
   }
+  function recordTimeline(state, { from = '', to = '', keyword = '', category = '', now = Date.now() } = {}) {
+    const earliest = state.records.reduce((min, r) => Math.min(min, r.start), now);
+    const start = from ? dayStart(from) : dayStart(dateKey(earliest));
+    const end = Math.min(to ? dayStart(to) + DAY : now, now);
+    if (end <= start) return [];
+    // Compute real gaps before filtering, preserving full cross-day records.
+    const records = state.records.filter(r => r.end > start && r.start < end).sort((a, b) => a.start - b.start);
+    const rows = []; let cursor = start;
+    for (const record of records) {
+      if (record.start > cursor) rows.push({ id: 'gap-' + cursor, gap: true, start: cursor, end: record.start });
+      if (matches(record, keyword, category)) rows.push(record);
+      cursor = Math.max(cursor, record.end);
+    }
+    if (cursor < end) rows.push({ id: 'gap-' + cursor, gap: true, start: cursor, end });
+    return rows.reverse();
+  }
+  function activityDistribution(rows) {
+    const groups = new Map();
+    for (const row of rows) {
+      if (row.gap) continue;
+      const title = row.title.trim();
+      groups.set(title, (groups.get(title) || 0) + row.end - row.start);
+    }
+    return Array.from(groups, ([title, ms]) => ({ title, ms })).sort((a, b) => b.ms - a.ms);
+  }
   function matches(record, keyword = '', category = '') {
     return (!category || record.category === category) && (!keyword.trim() || (record.title + ' ' + (CATEGORIES[record.category]?.name || '')).toLocaleLowerCase().includes(keyword.trim().toLocaleLowerCase()));
   }
@@ -129,5 +154,5 @@
     };
     return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Shiguang//Time Journal//ZH', 'CALSCALE:GREGORIAN', ...todos.flatMap(t => ['BEGIN:VEVENT', 'UID:' + t.id + '@shiguang', 'DTSTAMP:' + utc(Date.now()), 'DTSTART:' + utc(t.start), 'DTEND:' + utc(t.end), 'SUMMARY:' + escape(t.title), 'DESCRIPTION:' + escape((t.done ? '已完成\n' : '') + (t.notes || '')), 'END:VEVENT']), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
   }
-  return { DAY, CATEGORIES, id, dateKey, dayStart, addDays, time, localInput, exportFilename, parseLocal, duration, emptyState, overlap, inferCategory, validateRecord, insertRecord, anchor, timeline, matches, statistics, validateState, csv, calendarFile };
+  return { DAY, CATEGORIES, id, dateKey, dayStart, addDays, time, localInput, exportFilename, parseLocal, duration, emptyState, overlap, inferCategory, validateRecord, insertRecord, anchor, timeline, recordTimeline, activityDistribution, matches, statistics, validateState, csv, calendarFile };
 });

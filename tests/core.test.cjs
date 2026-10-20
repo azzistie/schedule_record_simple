@@ -51,6 +51,52 @@ test('timeline includes every gap from midnight and clips cross-day intervals', 
   const rows = C.timeline(s, d, base + 4 * 3600000);
   assert.deepEqual(rows.map(r => [!!r.gap,(r.start-base)/3600000,(r.end-base)/3600000]), [[false,0,1],[true,1,2],[false,2,3],[true,3,4]]);
 });
+test('all-records timeline is continuous and newest first, including empty days', () => {
+  const s=C.emptyState(); s.records=[record(8,9),record(56,57)];
+  const rows=C.recordTimeline(s,{now:base+58*3600000});
+  assert.deepEqual(rows.map(r=>[!!r.gap,(r.start-base)/3600000,(r.end-base)/3600000]),
+    [[true,57,58],[false,56,57],[true,9,56],[false,8,9],[true,0,8]]);
+  for(let i=1;i<rows.length;i++)assert.equal(rows[i].end,rows[i-1].start);
+  assert.equal(rows.reduce((sum,r)=>sum+r.end-r.start,0),58*3600000);
+  assert.equal(s.records.length,2,'display-only gaps must not become saved records');
+});
+test('all-records date filter preserves cross-day records and clips gaps to the range', () => {
+  const s=C.emptyState(); s.records=[record(-1,1),record(23,25)];
+  const rows=C.recordTimeline(s,{from:d,to:d,now:base+2*C.DAY});
+  assert.deepEqual(rows.map(r=>[!!r.gap,(r.start-base)/3600000,(r.end-base)/3600000]),
+    [[false,23,25],[true,1,23],[false,-1,1]]);
+});
+test('text and category filtering never turns hidden records into gaps', () => {
+  const s=C.emptyState(); s.records=[record(8,9,'项目'),{...record(10,11,'阅读'),category:'study'},record(11,12,'会议')];
+  for(const filter of [{keyword:'阅读'},{category:'study'}]){
+    const rows=C.recordTimeline(s,{from:d,to:d,now:base+13*3600000,...filter});
+    assert.deepEqual(rows.filter(r=>!r.gap).map(r=>r.title),['阅读']);
+    assert.deepEqual(rows.filter(r=>r.gap).map(r=>[(r.start-base)/3600000,(r.end-base)/3600000]),
+      [[12,13],[9,10],[0,8]]);
+  }
+});
+test('empty and boundary ranges produce only elapsed gaps and never future time', () => {
+  const s=C.emptyState();
+  assert.deepEqual(C.recordTimeline(s,{now:base}),[]);
+  const [gap]=C.recordTimeline(s,{now:base+3600000});
+  assert.equal(gap.gap,true);assert.equal(gap.start,base);assert.equal(gap.end,base+3600000);
+  const [pastGap]=C.recordTimeline(s,{from:d,to:d,now:base+3*C.DAY});
+  assert.equal(pastGap.start,base);assert.equal(pastGap.end,base+C.DAY);
+  assert.deepEqual(C.recordTimeline(s,{from:C.addDays(d,1),now:base+3600000}),[]);
+});
+test('activity distribution merges exact titles across categories and excludes gaps', () => {
+  const rows=[record(8,9,'阅读'),{...record(10,12,' 阅读 '),category:'study'},record(12,14,'项目'),record(15,16,'读书'),
+    {gap:true,start:base,end:base+8*3600000}];
+  assert.deepEqual(C.activityDistribution(rows),[
+    {title:'阅读',ms:3*3600000},{title:'项目',ms:2*3600000},{title:'读书',ms:3600000}
+  ]);
+  assert.deepEqual(C.activityDistribution([]),[]);
+  assert.equal(C.activityDistribution([record(1,2,'__proto__')])[0].ms,3600000);
+});
+test('activity distribution uses only the selected day portion of cross-day records', () => {
+  const s=C.emptyState();s.records=[record(-2,1,'阅读'),record(2,3,'阅读')];
+  assert.deepEqual(C.activityDistribution(C.timeline(s,d,base+4*3600000)),[{title:'阅读',ms:2*3600000}]);
+});
 test('statistics split midnight and include zero days in the denominator', () => {
   const state = C.emptyState(); state.records = [record(-1,1, '阅读')];
   const r = C.statistics(state, '阅读', 3, d);

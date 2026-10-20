@@ -11,6 +11,33 @@
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
 
 /* Monochrome visual hierarchy. Category labels remain legible at every shade. */
+.metric-activity{display:block;font-size:20px;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
+.metric-grid>.metric{min-width:0}
+.trailing-gap{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 24px;border-top:1px solid var(--line);background:#fafafa;color:#737373;font-size:11px}
+.trailing-gap .text-button{flex-shrink:0}
+.distribution-note{font-size:11px;color:#737373;margin:-12px 0 20px}
+.legend{min-width:0}
+.legend-row{gap:10px;align-items:flex-start}
+.legend-row b{display:flex;align-items:baseline;min-width:0;flex:1}
+.legend-row .category-dot{flex-shrink:0}
+.legend-row .legend-title{font-size:11px;color:var(--ink);overflow-wrap:anywhere;white-space:pre-wrap}
+.legend-duration{flex-shrink:0;white-space:nowrap}
+.record-time-row{align-items:start;margin-bottom:20px}
+.record-time-field{margin:0;padding:12px;min-width:0;border:1px solid var(--line);border-radius:12px;background:#fafafa}
+.record-time-field legend{font-size:12px;padding:0 5px;color:#737373}
+.time-picker summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;list-style:none;border-radius:8px;padding:5px 3px}
+.time-picker summary::-webkit-details-marker{display:none}
+.time-picker summary [data-time-display]{font-size:32px;font-weight:600;line-height:1.4;font-variant-numeric:tabular-nums;letter-spacing:1px}
+.time-picker summary .icon{width:16px;color:#737373;transform:rotate(90deg)}
+.time-picker[open] summary .icon{transform:rotate(-90deg)}
+.time-picker-options{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 14px}
+.modal-body .time-picker-options label{font-size:11px;text-align:center;margin:0;min-width:0}
+.modal-body .time-picker-options select{display:block;width:100%;height:176px;max-height:none;margin-top:5px;padding:2px;font-size:24px;font-variant-numeric:tabular-nums;overflow-y:auto}
+.time-picker-options option{padding:4px 2px;text-align:center}
+.modal-body .record-date-label{font-size:11px;margin:9px 0 0;color:#737373}
+.modal-body .record-date-label input{font-size:13px;min-height:34px;padding:5px 6px;margin-top:4px;width:100%;min-width:0}
+@media(max-width:680px){.metric-activity{font-size:15px}.trailing-gap{padding:12px 17px;flex-wrap:wrap}.distribution-content{flex-wrap:wrap;gap:20px}.distribution-content .legend{flex:1;min-width:150px}.pagination{gap:10px;flex-wrap:wrap}}
+@media(max-width:480px){.record-time-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.record-time-field{padding:8px}.time-picker summary [data-time-display]{font-size:28px}.modal-body .time-picker-options select{font-size:24px}.modal-body .record-date-label input{font-size:13px}.time-picker-options{gap:5px}}
 .sidebar,.topbar{background:#fff}
 .brand-mark{background:#181818;color:#fff;border-radius:11px}
 h1{font-size:44px;letter-spacing:.08em;font-weight:650;line-height:1.2}
