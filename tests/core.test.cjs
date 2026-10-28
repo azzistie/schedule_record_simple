@@ -116,6 +116,55 @@ test('state restore refuses duplicate ids, overlap and malformed todos', () => {
   s.records=[record(8,9,'test','same'),record(9,10,'test','same')];assert.throws(()=>C.validateState(s,now),/重复/);
   s=C.emptyState();s.todos=[{id:'a',title:'test',start:1,end:0,category:'work'}];assert.throws(()=>C.validateState(s,now));
 });
+test('legacy todos keep their completion state and receive safe defaults on restore', () => {
+  const s=C.emptyState();s.todos=[{...record(8,9),done:false},{...record(9,10),done:true}];
+  const clean=C.validateState(s,now);
+  assert.deepEqual(clean.todos.map(t=>[t.priority,t.progress,t.done]),[[0,0,false],[1,100,true]]);
+  assert.equal(s.todos[0].priority,undefined);
+  assert.equal(clean.version,1);
+});
+test('todo progress is authoritative, bounded and synchronized with completion', () => {
+  assert.deepEqual(C.todoDetails({priority:'high',progress:40,done:true}),{priority:0,progress:40,done:false});
+  assert.deepEqual(C.todoDetails({priority:'low',progress:100,done:false}),{priority:2,progress:100,done:true});
+  for(const progress of [-1,101,1.5,NaN,Infinity,'50',null,true]){
+    const s=C.emptyState();s.todos=[{...record(8,9),progress}];
+    assert.throws(()=>C.validateState(s,now),/完成进度/);
+  }
+  for(const priority of ['urgent','__proto__','toString','','1',null,[],['high'],-1,1.5,NaN,Infinity,Number.MAX_SAFE_INTEGER+1]){
+    const s=C.emptyState();s.todos=[{...record(8,9),priority}];
+    assert.throws(()=>C.validateState(s,now),/优先级/);
+  }
+});
+test('todo adjustments preserve times, notes, records and other todos', () => {
+  const s=C.emptyState();s.records=[record(1,2)];s.days[d]=base;
+  s.todos=[{...record(8,9,'计划','todo-a'),notes:'保留备注',priority:1,progress:30,done:false},{...record(9,10,'其他待办','todo-b'),priority:0}];
+  const snapshot=JSON.stringify(s);
+  let next=C.updateTodo(s,'todo-a',{priority:0});
+  assert.equal(next.todos[0].progress,30);
+  assert.equal(next.todos[0].notes,'保留备注');
+  assert.equal(next.todos[0].start,s.todos[0].start);assert.equal(next.todos[0].end,s.todos[0].end);
+  assert.equal(next.records,s.records);assert.equal(next.days,s.days);assert.deepEqual(next.todos[1],{...s.todos[1],priority:1});
+  next=C.updateTodo(next,'todo-a',{progress:100});assert.equal(next.todos[0].done,true);
+  next=C.updateTodo(next,'todo-a',{progress:65});assert.equal(next.todos[0].done,false);
+  next=C.updateTodo(next,'todo-a',{done:true});assert.equal(next.todos[0].progress,100);
+  next=C.updateTodo(next,'todo-a',{done:false});assert.equal(next.todos[0].progress,0);
+  assert.equal(next.todos[0].priority,0);assert.equal(JSON.stringify(s),snapshot);
+  assert.throws(()=>C.updateTodo(s,'missing',{progress:50}),/不存在/);
+});
+test('daily todo order prioritizes urgency and preserves chronological order within each level', () => {
+  const todos=[{...record(8,9,'low'),priority:'low'},record(6,7,'legacy'),{...record(12,13,'high-late'),priority:'high'},
+    {...record(7,8,'medium'),priority:'medium'},{...record(10,11,'high-early'),priority:'high'}];
+  assert.deepEqual(todos.slice().sort(C.compareTodos).map(t=>t.title),['high-early','high-late','legacy','medium','low']);
+});
+test('JSON backup roundtrips todo fields while CSV and ICS output remain unchanged', () => {
+  const s=C.emptyState();s.records=[record(1,2)];s.todos=[{...record(8,9),priority:'high',progress:35,done:false,notes:'备注'}];
+  const clean=C.validateState(s,now), restored=C.validateState(JSON.parse(JSON.stringify(clean)),now);
+  assert.deepEqual(restored,clean);assert.equal(restored.todos[0].progress,35);assert.equal(restored.todos[0].priority,0);
+  assert.equal(C.csv(clean.records),C.csv(s.records));
+  const legacy=clean.todos.map(({priority,progress,...todo})=>todo);
+  const stable=ics=>ics.replace(/^DTSTAMP:.*$/gm,'');
+  assert.equal(stable(C.calendarFile(clean.todos)),stable(C.calendarFile(legacy)));
+});
 test('CSV escapes quotes and neutralizes formula-leading text', () => {
   const csv=C.csv([record(8,9,'=SUM("a",1)')]);
   assert.ok(csv.startsWith('\uFEFF'));assert.ok(csv.includes('"\'=SUM(""a"",1)"'));

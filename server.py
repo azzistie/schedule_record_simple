@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parent
 WEB = ROOT
 PUBLIC_FILES = {"index.html", "styles.css", "app.js", "core.js", "sw.js", "icon.svg", "manifest.webmanifest"}
 CATEGORIES = {"work", "study", "life", "health", "rest", "other"}
+LEGACY_TODO_PRIORITIES = {"high": 0, "medium": 1, "low": 2}
 CHINA = timezone(timedelta(hours=8))
 MAX_BODY = 20 * 1024 * 1024
 EMPTY = {"version": 1, "records": [], "todos": [], "days": {}}
@@ -29,6 +30,26 @@ EMPTY = {"version": 1, "records": [], "todos": [], "days": {}}
 
 def valid_number(value):
     return type(value) in (int, float) and 0 <= value <= 253402271999000
+
+
+def todo_priority(item):
+    value = item.get("priority", "medium")
+    if isinstance(value, str) and value in LEGACY_TODO_PRIORITIES:
+        value = LEGACY_TODO_PRIORITIES[value]
+    if type(value) not in (int, float) or not 0 <= value <= 9007199254740991 or value != int(value):
+        raise ValueError("优先级需要是从 0 开始的整数。")
+    return int(value)
+
+
+def normalize_todo_order(todos):
+    groups, ranks = {}, {}
+    for index, todo in enumerate(todos):
+        day = datetime.fromtimestamp(todo["start"] / 1000, CHINA).strftime("%Y-%m-%d")
+        groups.setdefault(day, []).append((index, todo, todo_priority(todo)))
+    for group in groups.values():
+        for rank, (index, _, _) in enumerate(sorted(group, key=lambda entry: (entry[2], entry[1]["start"]))):
+            ranks[index] = rank
+    return [{**todo, "priority": ranks[index]} for index, todo in enumerate(todos)]
 
 
 def validate_state(data):
@@ -65,8 +86,13 @@ def validate_state(data):
             else:
                 if not isinstance(item.get("notes", ""), str) or len(item.get("notes", "")) > 2000:
                     raise ValueError("待办备注不能超过 2000 字。")
-                result.update(done=bool(item.get("done")), notes=item.get("notes", ""))
+                priority = todo_priority(item)
+                progress = item.get("progress", 100 if item.get("done") else 0)
+                if type(progress) not in (int, float) or not 0 <= progress <= 100 or progress != int(progress):
+                    raise ValueError("完成进度需要是 0–100 的整数。")
+                result.update(priority=priority, progress=int(progress), done=progress == 100, notes=item.get("notes", ""))
             clean[field].append(result)
+    clean["todos"] = normalize_todo_order(clean["todos"])
     clean["records"].sort(key=lambda r: r["start"])
     for before, after in zip(clean["records"], clean["records"][1:]):
         if before["end"] > after["start"]:
@@ -111,7 +137,9 @@ class Store:
     def read(self):
         with self.connect() as db:
             revision, data = db.execute("SELECT revision, data FROM journal WHERE id=1").fetchone()
-        return {"revision": revision, "state": json.loads(data)}
+        state = json.loads(data)
+        state["todos"] = normalize_todo_order(state["todos"])
+        return {"revision": revision, "state": state}
 
     def write(self, state, expected):
         clean = validate_state(state)

@@ -88,8 +88,11 @@
     return `<div class="distribution-content"><div class="donut-wrap"><div class="donut" role="img" aria-label="按做了什么汇总的事项时长，明细见下方" ${total ? `style="background:conic-gradient(${gradient})"` : ''}></div><div class="donut-text">${(total/3600000).toFixed(1)}<span>小时已记录</span></div></div><div class="legend">${data.length ? data.map(c => `<div class="legend-row"><b><span class="category-dot" style="background:${c.color}"></span><span class="legend-title">${escape(c.title)}</span></b><span class="legend-duration">${Math.round(c.ms/total*100)}% · ${C.duration(c.ms)}</span></div>`).join('') : '<p class="muted-empty">暂无统计数据</p>'}</div></div>`;
   }
   function miniTodos(date, limit = 3) {
-    const start = C.dayStart(date), todos = state.todos.filter(t => t.start < start+C.DAY && t.end > start).sort((a,b)=>a.start-b.start).slice(0,limit);
-    return todos.length ? todos.map(t => `<div class="mini-todo ${t.done ? 'done' : ''}"><input type="checkbox" ${t.done?'checked':''} data-todo="${escape(t.id)}" aria-label="完成 ${escape(t.title)}"><div><div class="mini-todo-title">${escape(t.title)}</div><div class="mini-todo-time">${C.time(t.start)} — ${C.time(t.end)}</div></div>${limit > 3 ? `<div class="todo-controls"><button class="icon-button" data-action="edit-todo" data-id="${escape(t.id)}" aria-label="编辑待办">${icon('edit')}</button><button class="icon-button" data-action="delete-todo" data-id="${escape(t.id)}" aria-label="删除待办">${icon('trash')}</button></div>` : ''}</div>`).join('') : empty('calendar', '暂无待办', '点击下方按钮添加待办。', `<button class="button soft" data-action="new-todo" data-date="${date}">${icon('plus')} 添加待办</button>`);
+    const start = C.dayStart(date), todos = state.todos.filter(t => t.start < start+C.DAY && t.end > start).sort(C.compareTodos).slice(0,limit);
+    return todos.length ? todos.map(t => {
+      const details=C.todoDetails(t), id=escape(t.id), title=escape(t.title);
+      return `<div class="mini-todo ${details.done ? 'done' : ''}"><input type="checkbox" ${details.done?'checked':''} data-todo="${id}" aria-label="完成 ${title}"><div class="mini-todo-body"><div class="mini-todo-title">${title}</div><div class="mini-todo-time">${C.time(t.start)} — ${C.time(t.end)}</div><div class="todo-priority-row"><label>优先级<input type="number" min="0" step="1" value="${details.priority}" required data-todo-priority="${id}" aria-label="${title}的优先级"></label><span class="todo-progress-text">进度 <output>${details.progress}%</output></span></div><input class="todo-progress-slider" type="range" min="0" max="100" step="1" value="${details.progress}" data-todo-progress="${id}" aria-label="${title}的完成进度" aria-valuetext="${details.progress}%"></div>${limit > 3 ? `<div class="todo-controls"><button class="icon-button" data-action="edit-todo" data-id="${id}" aria-label="编辑待办">${icon('edit')}</button><button class="icon-button" data-action="delete-todo" data-id="${id}" aria-label="删除待办">${icon('trash')}</button></div>` : ''}</div>`;
+    }).join('') : empty('calendar', '暂无待办', '点击下方按钮添加待办。', `<button class="button soft" data-action="new-todo" data-date="${date}">${icon('plus')} 添加待办</button>`);
   }
   function renderToday() {
     const now=Date.now(), rows=C.timeline(state,selectedDate,now), records=rows.filter(r=>!r.gap), total=records.reduce((s,r)=>s+r.end-r.start,0), todayAnchor=C.anchor(state,now), gap=rows.filter(r=>r.gap).reduce((s,r)=>s+r.end-r.start,0);
@@ -125,7 +128,7 @@
   }
   function renderCalendar() {
     const first=calendarMonth+'-01',offset=(new Date(C.dayStart(first)+8*3600000).getUTCDay()+6)%7,start=C.addDays(first,-offset);
-    const cells=Array.from({length:42},(_,i)=>{const date=C.addDays(start,i),a=C.dayStart(date),items=state.todos.filter(t=>t.start<a+C.DAY&&t.end>a).sort((a,b)=>a.start-b.start);return `<button class="calendar-day ${date.slice(0,7)!==calendarMonth?'outside':''} ${date===today?'today':''} ${date===calendarDate?'selected':''}" data-action="select-day" data-date="${date}" aria-label="${date}，${items.length} 项待办" aria-pressed="${date===calendarDate}"><span class="day-num">${Number(date.slice(8))}</span>${items.slice(0,2).map(t=>`<span class="calendar-event ${t.done?'complete':''}" style="--cat:${C.CATEGORIES[t.category].color}">${escape(t.title)}</span>`).join('')}${items.length>2?`<span class="more-events">+${items.length-2} 项</span>`:''}</button>`}).join('');
+    const cells=Array.from({length:42},(_,i)=>{const date=C.addDays(start,i),a=C.dayStart(date),items=state.todos.filter(t=>t.start<a+C.DAY&&t.end>a).sort(C.compareTodos);return `<button class="calendar-day ${date.slice(0,7)!==calendarMonth?'outside':''} ${date===today?'today':''} ${date===calendarDate?'selected':''}" data-action="select-day" data-date="${date}" aria-label="${date}，${items.length} 项待办" aria-pressed="${date===calendarDate}"><span class="day-num">${Number(date.slice(8))}</span>${items.slice(0,2).map(t=>`<span class="calendar-event ${t.done?'complete':''}" style="--cat:${C.CATEGORIES[t.category].color}">${escape(t.title)}</span>`).join('')}${items.length>2?`<span class="more-events">+${items.length-2} 项</span>`:''}</button>`}).join('');
     const count=state.todos.filter(t=>C.dateKey(t.start)===calendarDate).length;
     return heading('无畏','',`<button class="button primary" data-action="new-todo" data-date="${calendarDate}">${icon('plus')} 新建待办</button>`)+`<div class="calendar-layout"><section class="card calendar-card"><div class="calendar-top"><h2>${calendarMonth.slice(0,4)} 年 ${Number(calendarMonth.slice(5))} 月</h2><div class="month-nav"><button class="icon-button" data-action="prev-month" aria-label="上个月"><span style="transform:rotate(180deg)">${icon('chevron')}</span></button><button class="button" data-action="calendar-today">今天</button><button class="icon-button" data-action="next-month" aria-label="下个月">${icon('chevron')}</button></div></div><div class="calendar-weekdays">${['周一','周二','周三','周四','周五','周六','周日'].map(d=>`<span>${d}</span>`).join('')}</div><div class="calendar-grid">${cells}</div><p class="subtle" style="margin-top:17px">点击日期查看安排 · 完成待办不会自动计入实际用时</p></section><section class="card agenda"><h2>${dateLabel(calendarDate)}</h2><p class="subtle" style="margin:5px 0 17px">${count?`${count} 项待办`:'暂无待办'}</p>${miniTodos(calendarDate,9999)}<div class="agenda-foot"><button class="button soft full-width" data-action="new-todo" data-date="${calendarDate}">${icon('plus')} 添加这一天的待办</button></div></section></div>`;
   }
@@ -162,8 +165,8 @@
   }
   function openTodo(todo,date=calendarDate) {
     const now=Date.now(),defaultStart=date===today?Math.ceil((now+60000)/1800000)*1800000:C.dayStart(date)+9*3600000;
-    const t=todo||{title:'',category:'work',start:defaultStart,end:defaultStart+3600000,notes:''};
-    showModal(todo?'编辑待办':'新建待办','计划不会占用实际记录；完成后再按真实用时记录。',`<form id="todo-form" data-id="${todo?escape(todo.id):''}"><label>想做什么<input name="title" value="${escape(t.title)}" maxlength="500" required placeholder="例如：整理一周计划"></label><div class="form-row"><label>开始时间<input type="datetime-local" name="start" value="${C.localInput(t.start)}" required></label><label>结束时间<input type="datetime-local" name="end" value="${C.localInput(t.end)}" required></label></div><label>分类<select name="category">${catOptions(t.category)}</select></label><label>备注（可选）<textarea name="notes" rows="3" maxlength="2000">${escape(t.notes)}</textarea></label>${formError()}<div class="modal-actions"><button class="button" type="button" data-action="close-modal">取消</button><button class="button primary">保存待办</button></div></form>`);
+    const t=todo||{title:'',category:'work',start:defaultStart,end:defaultStart+3600000,notes:'',priority:state.todos.filter(item=>C.dateKey(item.start)===C.dateKey(defaultStart)).length}, details=C.todoDetails(t);
+    showModal(todo?'编辑待办':'新建待办','计划不会占用实际记录；完成后再按真实用时记录。',`<form id="todo-form" data-id="${todo?escape(todo.id):''}"><label>想做什么<input name="title" value="${escape(t.title)}" maxlength="500" required placeholder="例如：整理一周计划"></label><div class="form-row"><label>开始时间<input type="datetime-local" name="start" value="${C.localInput(t.start)}" required></label><label>结束时间<input type="datetime-local" name="end" value="${C.localInput(t.end)}" required></label></div><label>分类<select name="category">${catOptions(t.category)}</select></label><div class="form-row"><label>优先级（从 0 开始）<input type="number" name="priority" min="0" step="1" value="${details.priority}" required></label><label>完成进度（%）<input type="number" name="progress" min="0" max="100" step="1" value="${details.progress}" required></label></div><p class="modal-help todo-priority-help">按开始日期独立排序；填入序号即可插入该位置，其余顺移，超出范围排在末尾。</p><p class="modal-help todo-progress-help">100% 表示已完成；勾选完成设为 100%，取消勾选重置为 0%。</p><label>备注（可选）<textarea name="notes" rows="3" maxlength="2000">${escape(t.notes)}</textarea></label>${formError()}<div class="modal-actions"><button class="button" type="button" data-action="close-modal">取消</button><button class="button primary">保存待办</button></div></form>`);
   }
   function confirmDelete(kind,id) { const item=(kind==='record'?state.records:state.todos).find(r=>r.id===id); if(!item)return; showModal('删除这'+(kind==='record'?'条记录':'项待办')+'？','删除后可以从你之前导出的备份恢复。',`<p style="overflow-wrap:anywhere">${escape(item.title)}</p>${formError()}<div class="modal-actions"><button class="button" data-action="close-modal">取消</button><button class="button danger" data-action="confirm-delete" data-kind="${kind}" data-id="${escape(id)}">确认删除</button></div>`); }
   function showHelp(){showModal('使用说明','记录、补录、统计与待办',`<ol class="help-steps"><li><strong>设置今天的起点</strong>比如 09:00 开始一天；09:40 发送“吃早餐”，就记录 09:00—09:40。</li><li><strong>每做完一件事，就发一句</strong>10:20 发送“阅读”，自动记录 09:40—10:20。输入框接受事项描述，时间由发送时刻确定。</li><li><strong>手动补录</strong>点击「手动补录」指定日期、起止时间和事项；文本中的时间不会自动解析。</li><li><strong>统计与日历</strong>在全部记录里筛选导出，在时间洞察查看过去 N 天的投入，在日历里安排待办。</li></ol><button class="button primary full-width" data-action="close-modal">开始记录</button>`);}
@@ -173,6 +176,12 @@
     for(let i=0;i<5;i++){const start=C.dayStart(C.addDays(today,i))+[19,10,15,9,20][i]*3600000;s.todos.push({id:C.id(),title:['读完今天的 20 页书','梳理下周的工作安排','去公园散步','一小时专注学习','做晚饭'][i],category:['study','work','health','study','life'][i],start,end:start+3600000,done:false,notes:'',createdAt:now});}return s;
   }
   document.addEventListener('input',e=>{if(e.target.id==='quick-title'){draft=e.target.value;try{safeStorage.set('shiguang-draft',draft);}catch{}}if(e.target.id==='quick-category')draftCategory=e.target.value;});
+  document.addEventListener('input',e=>{
+    if(e.target.dataset.todoProgress){
+      e.target.closest('.mini-todo-body').querySelector('output').textContent=e.target.value+'%';
+      e.target.setAttribute('aria-valuetext',e.target.value+'%');
+    }
+  });
   document.addEventListener('keydown',e=>{if(e.target.id==='quick-title'&&(e.ctrlKey||e.metaKey)&&e.key==='Enter'&&!e.isComposing){e.preventDefault();$('#quick-form').requestSubmit();}});
   document.addEventListener('change',async e=>{
     if(e.target.closest('.time-picker-options')){
@@ -180,7 +189,22 @@
       picker.querySelector('[data-time-display]').textContent=selects[0].value+':'+selects[1].value;
     }
     if(e.target.id==='timeline-date'){selectedDate=e.target.value||today;render();}
-    if(e.target.dataset.todo){try{await save({...state,todos:state.todos.map(t=>t.id===e.target.dataset.todo?{...t,done:e.target.checked}:t)});render();toast(e.target.checked?'待办已完成，实际用时可在今日记录中填写。':'已恢复为未完成');}catch(error){render();toast(error.message);}}
+    const control=e.target, todoId=control.dataset.todo||control.dataset.todoPriority||control.dataset.todoProgress;
+    if(todoId){
+      const controlKind=control.dataset.todo?'todo':control.dataset.todoPriority?'todoPriority':'todoProgress';
+      const restoreFocus=document.activeElement===control, previousView=view;
+      const changes=control.dataset.todo?{done:control.checked}:control.dataset.todoPriority?{priority:Number(control.value)}:{progress:Number(control.value)};
+      const message=control.dataset.todo?(control.checked?'待办已完成，实际用时可在今日记录中填写。':'已恢复为未完成'):control.dataset.todoPriority?'优先级已更新':'完成进度已更新';
+      try{
+        if(control.dataset.todoPriority&&(!control.value.trim()||!control.checkValidity()))throw Error('优先级需要是从 0 开始的整数。');
+        control.disabled=true;
+        await save(C.updateTodo(state,todoId,changes));render();toast(message);
+        if(restoreFocus&&view===previousView){
+          const replacement=Array.from(document.querySelectorAll('[data-todo],[data-todo-priority],[data-todo-progress]')).find(el=>el.dataset[controlKind]===todoId);
+          replacement?.focus({preventScroll:true});
+        }
+      }catch(error){render();toast(error.message);}
+    }
     if(e.target.id==='import-file'&&e.target.files[0]){const file=e.target.files[0];try{if(file.size>20*1024*1024)throw Error('备份不能超过 20 MB。');const raw=JSON.parse(await file.text()),imported=C.validateState(raw.state||raw);window.pendingImport=imported;showModal('恢复这份备份？','这会替换当前的全部记录与待办。建议先导出当前备份。',`<p>备份包含 ${imported.records.length} 条记录、${imported.todos.length} 项待办。</p>${formError()}<div class="modal-actions"><button class="button" data-action="export-json">先导出当前数据</button><button class="button primary" data-action="confirm-import">确认替换</button></div>`);}catch(error){toast('导入失败：'+error.message);}e.target.value='';}
   });
   document.addEventListener('submit',async e=>{
@@ -203,8 +227,11 @@
         const old=state.records.find(r=>r.id===form.dataset.id);const next=C.insertRecord(state,{...old,title:get('title'),category:get('category'),start:recordTimestamp(form,get,'start'),end:recordTimestamp(form,get,'end')},{replace:fd.has('replace')});if(submit)submit.disabled=true;await save(next);modal.close();render();toast('时间记录已保存');
       }else if(form.id==='todo-form'){
         const start=C.parseLocal(get('start')),end=C.parseLocal(get('end'));if(!get('title').trim())throw Error('请填写待办事项。');if(!Number.isFinite(start)||!Number.isFinite(end)||end<=start)throw Error('结束时间需要晚于开始时间。');
-        const old=state.todos.find(t=>t.id===form.dataset.id),todo={id:old?.id||C.id(),title:get('title').trim(),category:get('category'),start,end,done:old?.done||false,notes:get('notes'),createdAt:old?.createdAt||Date.now()};
-        if(submit)submit.disabled=true;await save({...state,todos:[...state.todos.filter(t=>t.id!==todo.id),todo]});modal.close();render();toast('日历待办已保存');
+        if(!get('progress').trim())throw Error('请填写完成进度。');
+        if(!get('priority').trim())throw Error('请填写优先级。');
+        const details=C.todoDetails({priority:Number(get('priority')),progress:Number(get('progress'))});
+        const old=state.todos.find(t=>t.id===form.dataset.id),todo={id:old?.id||C.id(),title:get('title').trim(),category:get('category'),start,end,...details,notes:get('notes'),createdAt:old?.createdAt||Date.now()};
+        if(submit)submit.disabled=true;await save(C.insertTodo(state,todo));modal.close();render();toast('日历待办已保存');
       }else if(form.id==='record-filters'){
         if(get('from')&&get('to')&&get('from')>get('to'))throw Error('开始日期不能晚于结束日期。');recordQuery=get('query');recordCategory=get('category');fromDate=get('from');toDate=get('to');page=1;render();
       }else if(form.id==='stats-filters'){statsQuery=get('query');statsCategory=get('category');statsDays=Math.max(1,Math.min(366,Number(get('days'))||7));statsEnd=get('end')||today;render();}
@@ -220,7 +247,7 @@
       else if(a==='edit-record')openRecord(state.records.find(r=>r.id===button.dataset.id));
       else if(a==='delete-record')confirmDelete('record',button.dataset.id);
       else if(a==='delete-todo')confirmDelete('todo',button.dataset.id);
-      else if(a==='confirm-delete'){button.disabled=true;const field=button.dataset.kind==='record'?'records':'todos';await save({...state,[field]:state[field].filter(r=>r.id!==button.dataset.id)});modal.close();render();toast('已删除');}
+      else if(a==='confirm-delete'){button.disabled=true;const field=button.dataset.kind==='record'?'records':'todos';await save(field==='todos'?C.deleteTodo(state,button.dataset.id):{...state,records:state.records.filter(r=>r.id!==button.dataset.id)});modal.close();render();toast('已删除');}
       else if(a==='set-start')openStart();
       else if(a==='quick-tag'){draft=button.dataset.text;$('#quick-title').value=draft;$('#quick-title').focus();}
       else if(a==='new-todo')openTodo(null,button.dataset.date||calendarDate);
@@ -239,7 +266,7 @@
       else if(a==='export-ics')download('ics',C.calendarFile(state.todos),'text/calendar;charset=utf-8');
       else if(a==='help')showHelp();
       else if(a==='refresh'){await refresh();toast('已刷新');}
-      else if(a==='demo'){if(!demo){realState=state;state=demoState();demo=true;}navigate('today');}
+      else if(a==='demo'){if(!demo){realState=state;state=C.validateState(demoState());demo=true;}navigate('today');}
       else if(a==='exit-demo'){state=realState;realState=null;demo=false;render();await refresh(true);}
       else if(a==='connection'){const info=await api('/api/info');showModal('在手机上打开时光','手机与这台电脑需要连接同一 Wi-Fi。',`<p class="modal-help">在手机浏览器输入以下地址。连接地址包含你的访问码，请只在自己的设备使用。</p>${info.urls.map(url=>`<label style="margin-top:18px">手机连接地址<input readonly value="${escape(url+'/#key='+token)}" aria-label="手机连接地址"></label>`).join('')}<p class="modal-help">电脑需保持开机并运行服务。首次访问如被防火墙阻止，请允许 Python 访问专用网络。</p><div class="modal-actions"><button class="button primary" data-action="close-modal">知道了</button></div>`);}
     }catch(error){renderError(error);button.disabled=false;}

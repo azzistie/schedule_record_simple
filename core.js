@@ -10,6 +10,56 @@
     life: { name: '生活', color: '#747474' }, health: { name: '运动', color: '#929292' },
     rest: { name: '休息', color: '#b0b0b0' }, other: { name: '其他', color: '#cdcdcd' }
   };
+  const LEGACY_TODO_PRIORITIES = { high: 0, medium: 1, low: 2 };
+  function todoDetails(todo) {
+    const rawPriority = todo.priority === undefined ? 'medium' : todo.priority;
+    const priority = typeof rawPriority === 'string' && Object.prototype.hasOwnProperty.call(LEGACY_TODO_PRIORITIES, rawPriority) ? LEGACY_TODO_PRIORITIES[rawPriority] : rawPriority;
+    const progress = todo.progress === undefined ? (todo.done ? 100 : 0) : todo.progress;
+    if (!Number.isSafeInteger(priority) || priority < 0) throw Error('优先级需要是从 0 开始的整数。');
+    if (!Number.isInteger(progress) || progress < 0 || progress > 100) throw Error('完成进度需要是 0–100 的整数。');
+    return { priority, progress, done: progress === 100 };
+  }
+  function compareTodos(a, b) {
+    return todoDetails(a).priority - todoDetails(b).priority || a.start - b.start;
+  }
+  function normalizeTodoOrder(todos) {
+    const groups = new Map(), ranks = new Map();
+    for (const todo of todos) {
+      todoDetails(todo);
+      const day = dateKey(todo.start);
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day).push(todo);
+    }
+    for (const group of groups.values()) group.sort(compareTodos).forEach((todo, index) => ranks.set(todo, index));
+    // Keep storage/export order and unrelated fields intact; only renumber each day's queue.
+    return todos.map(todo => todo.priority === ranks.get(todo) ? todo : { ...todo, priority: ranks.get(todo) });
+  }
+  function insertTodo(state, input) {
+    const todos = normalizeTodoOrder(state.todos), old = todos.find(t => t.id === input.id);
+    const candidate = { ...old, ...input };
+    const day = dateKey(candidate.start);
+    const peers = todos.filter(t => t.id !== candidate.id && dateKey(t.start) === day).sort(compareTodos);
+    if (input.priority === undefined) candidate.priority = old && dateKey(old.start) === day ? old.priority : peers.length;
+    const updated = { ...candidate, ...todoDetails(candidate) };
+    peers.splice(Math.min(updated.priority, peers.length), 0, updated);
+    const ranks = new Map(peers.map((todo, index) => [todo.id, index]));
+    const next = old ? todos.map(t => t.id === updated.id ? updated : t) : [...todos, updated];
+    const reordered = next.map(t => ranks.has(t.id) && t.priority !== ranks.get(t.id) ? { ...t, priority: ranks.get(t.id) } : t);
+    return { ...state, todos: normalizeTodoOrder(reordered) };
+  }
+  function deleteTodo(state, id) {
+    return { ...state, todos: normalizeTodoOrder(state.todos.filter(t => t.id !== id)) };
+  }
+  function updateTodo(state, id, changes) {
+    const normalized = { ...state, todos: normalizeTodoOrder(state.todos) };
+    const old = normalized.todos.find(t => t.id === id);
+    if (!old) throw Error('这项待办已不存在，请刷新后重试。');
+    const todo = { ...old, ...changes };
+    if (Object.prototype.hasOwnProperty.call(changes, 'done') && !Object.prototype.hasOwnProperty.call(changes, 'progress')) {
+      todo.progress = changes.done ? 100 : 0;
+    }
+    return insertTodo(normalized, todo);
+  }
   const id = () => typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2);
   const dateKey = ms => new Date(ms + 8 * 3600000).toISOString().slice(0, 10);
   const dayStart = date => Date.parse(date + 'T00:00:00+08:00');
@@ -128,10 +178,10 @@
     }).sort((a, b) => a.start - b.start);
     for (let i = 1; i < records.length; i++) if (overlap(records[i - 1], records[i])) throw Error('备份中存在重叠记录，请先修正。');
     const todoIds = new Set();
-    const todos = input.todos.map(t => {
+    const todos = normalizeTodoOrder(input.todos.map(t => {
       if (typeof t.id !== 'string' || !t.id || todoIds.has(t.id) || !t.title?.trim() || t.title.length > 500 || !Number.isFinite(t.start) || !Number.isFinite(t.end) || t.end <= t.start || !CATEGORIES[t.category]) throw Error('待办数据格式不正确。');
-      todoIds.add(t.id); return { id: t.id, title: t.title.trim(), start: t.start, end: t.end, category: t.category, done: !!t.done, notes: String(t.notes || '').slice(0, 2000), createdAt: t.createdAt || now };
-    });
+      todoIds.add(t.id); return { id: t.id, title: t.title.trim(), start: t.start, end: t.end, category: t.category, ...todoDetails(t), notes: String(t.notes || '').slice(0, 2000), createdAt: t.createdAt || now };
+    }));
     const days = {};
     for (const [date, start] of Object.entries(input.days)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(start) || dateKey(start) !== date || start > now) throw Error('每日起点数据不正确。');
@@ -154,5 +204,5 @@
     };
     return ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Shiguang//Time Journal//ZH', 'CALSCALE:GREGORIAN', ...todos.flatMap(t => ['BEGIN:VEVENT', 'UID:' + t.id + '@shiguang', 'DTSTAMP:' + utc(Date.now()), 'DTSTART:' + utc(t.start), 'DTEND:' + utc(t.end), 'SUMMARY:' + escape(t.title), 'DESCRIPTION:' + escape((t.done ? '已完成\n' : '') + (t.notes || '')), 'END:VEVENT']), 'END:VCALENDAR'].map(fold).join('\r\n') + '\r\n';
   }
-  return { DAY, CATEGORIES, id, dateKey, dayStart, addDays, time, localInput, exportFilename, parseLocal, duration, emptyState, overlap, inferCategory, validateRecord, insertRecord, anchor, timeline, recordTimeline, activityDistribution, matches, statistics, validateState, csv, calendarFile };
+  return { DAY, CATEGORIES, todoDetails, compareTodos, normalizeTodoOrder, insertTodo, deleteTodo, updateTodo, id, dateKey, dayStart, addDays, time, localInput, exportFilename, parseLocal, duration, emptyState, overlap, inferCategory, validateRecord, insertRecord, anchor, timeline, recordTimeline, activityDistribution, matches, statistics, validateState, csv, calendarFile };
 });
